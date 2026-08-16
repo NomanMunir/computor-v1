@@ -8,88 +8,84 @@ import sys
 import re
 
 
-def custom_sqrt(n):
-    """
-    Calculate square root using Newton's method (Babylonian method)
-    No math library allowed!
-    """
+def custom_sqrt(n: float) -> float | None:
+    """Calculate square root using Newton's method (Babylonian method)."""
     if n < 0:
         return None
     if n == 0:
-        return 0
+        return 0.0
     
-    # Initial guess
-    x = n
-    # Newton's method: x_new = (x + n/x) / 2
-    for _ in range(50):  # Sufficient iterations for convergence
-        x_new = (x + n / x) / 2
-        if abs(x_new - x) < 1e-10:  # Convergence threshold
+    x = float(n)
+    for _ in range(100):
+        x_new = (x + n / x) / 2.0
+        if custom_abs(x_new - x) < 1e-12:
             break
         x = x_new
-    
     return x
 
 
-def custom_abs(n):
-    """Absolute value without using built-in abs"""
+def custom_abs(n: float) -> float:
+    """Absolute value without using built-in abs."""
     return n if n >= 0 else -n
 
 
-def gcd(a, b):
-    """
-    Calculate greatest common divisor using Euclidean algorithm
-    """
-    a, b = int(abs(a)), int(abs(b))
+def gcd(a: int, b: int) -> int:
+    """Calculate greatest common divisor using Euclidean algorithm."""
+    a, b = int(custom_abs(a)), int(custom_abs(b))
     while b:
         a, b = b, a % b
     return a
 
 
-def simplify_fraction(numerator, denominator):
-    """
-    Simplify a fraction to lowest terms
-    Returns: (num, denom) tuple
-    """
+def simplify_fraction(numerator: int, denominator: int) -> tuple[int, int]:
+    """Simplify a fraction to lowest terms."""
     if denominator == 0:
         return (numerator, denominator)
     
-    # Find GCD
     divisor = gcd(numerator, denominator)
     if divisor == 0:
         return (numerator, denominator)
     
     num = int(numerator / divisor)
     denom = int(denominator / divisor)
-    
-    # Make sure denominator is positive
     if denom < 0:
         num = -num
         denom = -denom
-    
     return (num, denom)
 
 
-def format_fraction(value, precision=1e-9):
+def format_number(val: float, max_decimals: int = 6) -> str:
     """
-    Try to represent a decimal as a simple fraction
-    Returns string representation
+    Format a number cleanly:
+    - If integer (e.g. 4.0, -5.0), display as '4', '-5'
+    - Otherwise format with up to max_decimals without trailing zero noise.
     """
-    # Check if it's already close to an integer
-    if abs(value - round(value)) < precision:
+    if custom_abs(val) < 1e-12:
+        return "0"
+    if val.is_integer():
+        return str(int(val))
+    rounded = round(val, max_decimals)
+    if rounded.is_integer():
+        return str(int(rounded))
+    # Format with precision and strip trailing zeros
+    formatted = f"{rounded:.{max_decimals}f}".rstrip("0").rstrip(".")
+    return formatted
+
+
+def format_fraction(value: float, precision: float = 1e-9) -> str:
+    """Try to represent a decimal as a simple fraction, fallback to formatted float."""
+    if custom_abs(value - round(value)) < precision:
         return str(int(round(value)))
     
-    # Try to find a simple fraction representation
-    # Check denominators up to 100
     for denom in range(1, 101):
         num = value * denom
-        if abs(num - round(num)) < precision:
-            num, denom = simplify_fraction(round(num), denom)
-            if denom == 1:
-                return str(num)
-            return f"{num}/{denom}"
+        if custom_abs(num - round(num)) < precision:
+            s_num, s_denom = simplify_fraction(int(round(num)), denom)
+            if s_denom == 1:
+                return str(s_num)
+            return f"{s_num}/{s_denom}"
     
-    # Fall back to decimal
-    return str(value)
+    return format_number(value)
 
 
 class Term:
@@ -171,139 +167,106 @@ def reduce_equation(left_terms, right_terms):
     return coefficients
 
 
-def format_reduced_form(coefficients):
-    """
-    Format the reduced equation in the required output format
-    """
+def format_reduced_form(coefficients: dict[int, float]) -> str:
+    """Format the reduced equation in the standard format (e.g. '4 * X^0 + 4 * X^1 - 9.3 * X^2 = 0')."""
     if not coefficients:
         return "0 * X^0 = 0"
     
-    # Get max power to determine range
     max_power = max(coefficients.keys()) if coefficients else 0
-    
-    # Check if all coefficients are zero
-    all_zero = all(coefficients.get(i, 0) == 0 for i in range(max_power + 1))
+    all_zero = all(custom_abs(coefficients.get(i, 0.0)) < 1e-12 for i in range(max_power + 1))
     if all_zero:
         return "0 * X^0 = 0"
     
     terms = []
     for power in range(max_power + 1):
-        coeff = coefficients.get(power, 0)
-        
+        coeff = coefficients.get(power, 0.0)
+        if custom_abs(coeff) < 1e-12:
+            coeff = 0.0
+            
+        coeff_str = format_number(custom_abs(coeff)) if terms else format_number(coeff)
         if not terms:
-            # First term - no leading sign if positive
-            terms.append(f"{coeff} * X^{power}")
+            terms.append(f"{coeff_str} * X^{power}")
         else:
-            # Subsequent terms with explicit sign
-            if coeff >= 0:
-                terms.append(f"+ {coeff} * X^{power}")
-            else:
-                terms.append(f"- {-coeff} * X^{power}")
+            sign = "+" if coeff >= 0 else "-"
+            terms.append(f"{sign} {coeff_str} * X^{power}")
     
     return " ".join(terms) + " = 0"
 
 
-def get_degree(coefficients):
-    """
-    Get the degree of the polynomial (highest power with non-zero coefficient)
-    """
+def get_degree(coefficients: dict[int, float]) -> int:
+    """Get polynomial degree (highest power with non-zero coefficient)."""
     if not coefficients:
         return 0
     
-    # Find highest power with non-zero coefficient
     for power in sorted(coefficients.keys(), reverse=True):
-        if coefficients[power] != 0:
+        if custom_abs(coefficients[power]) > 1e-12:
             return power
-    
     return 0
 
 
-def solve_degree_0(coefficients):
-    """
-    Solve constant equation: a = 0
-    """
-    a = coefficients.get(0, 0)
-    
-    if a == 0:
+def solve_degree_0(coefficients: dict[int, float]) -> None:
+    """Solve constant equation: c = 0."""
+    c = coefficients.get(0, 0.0)
+    if custom_abs(c) < 1e-12:
         print("Any real number is a solution.")
     else:
         print("No solution.")
 
 
-def solve_degree_1(coefficients):
-    """
-    Solve linear equation: a + bX = 0
-    Solution: X = -a/b
-    """
-    a = coefficients.get(0, 0)
-    b = coefficients.get(1, 0)
+def solve_degree_1(coefficients: dict[int, float]) -> None:
+    """Solve linear equation: a + bX = 0 -> X = -a / b."""
+    a = coefficients.get(0, 0.0)
+    b = coefficients.get(1, 0.0)
     
-    if b == 0:
+    if custom_abs(b) < 1e-12:
         solve_degree_0(coefficients)
         return
     
     solution = -a / b
     print("The solution is:")
-    print(solution)
+    print(format_number(solution))
 
 
-def solve_degree_2(coefficients):
-    """
-    Solve quadratic equation: a + bX + cX^2 = 0
-    Using discriminant: Δ = b^2 - 4ac
-    """
-    a = coefficients.get(0, 0)
-    b = coefficients.get(1, 0)
-    c = coefficients.get(2, 0)
+def solve_degree_2(coefficients: dict[int, float]) -> None:
+    """Solve quadratic equation: c + bX + aX^2 = 0 using discriminant Δ = b^2 - 4ac."""
+    c_val = coefficients.get(0, 0.0)
+    b_val = coefficients.get(1, 0.0)
+    a_val = coefficients.get(2, 0.0)
     
-    if c == 0:
+    if custom_abs(a_val) < 1e-12:
         solve_degree_1(coefficients)
         return
     
-    # Calculate discriminant
-    discriminant = b * b - 4 * a * c
+    discriminant = b_val * b_val - 4.0 * a_val * c_val
     
-    if discriminant > 0:
+    if discriminant > 1e-12:
         print("Discriminant is strictly positive, the two solutions are:")
         sqrt_disc = custom_sqrt(discriminant)
-        sol1 = (-b + sqrt_disc) / (2 * c)
-        sol2 = (-b - sqrt_disc) / (2 * c)
-        # Print in descending order
-        if sol1 > sol2:
-            print(sol1)
-            print(sol2)
-        else:
-            print(sol2)
-            print(sol1)
-    elif discriminant == 0:
+        sol1 = (-b_val + sqrt_disc) / (2.0 * a_val)
+        sol2 = (-b_val - sqrt_disc) / (2.0 * a_val)
+        # Display solutions
+        print(format_number(sol1))
+        print(format_number(sol2))
+    elif custom_abs(discriminant) <= 1e-12:
         print("Discriminant is zero, the solution is:")
-        solution = -b / (2 * c)
-        print(solution)
-    else:  # discriminant < 0
+        solution = -b_val / (2.0 * a_val)
+        print(format_number(solution))
+    else:
         print("Discriminant is strictly negative, the two complex solutions are:")
         sqrt_disc = custom_sqrt(-discriminant)
-        real_part = -b / (2 * c)
-        imag_part = sqrt_disc / (2 * c)
+        real_part = -b_val / (2.0 * a_val)
+        imag_part = sqrt_disc / (2.0 * a_val)
         
-        # Try to format as fractions for cleaner output
         real_str = format_fraction(real_part)
-        imag_str = format_fraction(imag_part)
+        imag_str = format_fraction(custom_abs(imag_part))
         
-        # Format with proper signs
-        if imag_str.startswith('-'):
-            print(f"{real_str} - {imag_str[1:]}i")
-            print(f"{real_str} + {imag_str[1:]}i")
-        else:
-            print(f"{real_str} + {imag_str}i")
-            print(f"{real_str} - {imag_str}i")
+        print(f"{real_str} + {imag_str}i")
+        print(f"{real_str} - {imag_str}i")
 
 
-def solve_equation(coefficients):
-    """
-    Main solving logic - dispatches to appropriate solver based on degree
-    """
+def solve_equation(coefficients: dict[int, float]) -> None:
+    """Main solving logic - dispatches to appropriate solver based on degree."""
     degree = get_degree(coefficients)
-    
     print(f"Polynomial degree: {degree}")
     
     if degree > 2:
@@ -312,7 +275,7 @@ def solve_equation(coefficients):
         solve_degree_2(coefficients)
     elif degree == 1:
         solve_degree_1(coefficients)
-    else:  # degree 0
+    else:
         solve_degree_0(coefficients)
 
 
@@ -348,4 +311,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nProgram interrupted by user. Exiting...", file=sys.stderr)
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)

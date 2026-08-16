@@ -244,9 +244,9 @@ def solve_degree_2(coefficients: dict[int, float]) -> None:
         sqrt_disc = custom_sqrt(discriminant)
         sol1 = (-b_val + sqrt_disc) / (2.0 * a_val)
         sol2 = (-b_val - sqrt_disc) / (2.0 * a_val)
-        # Display solutions
-        print(format_number(sol1))
-        print(format_number(sol2))
+        first, second = (sol1, sol2) if sol1 > sol2 else (sol2, sol1)
+        print(format_number(first))
+        print(format_number(second))
     elif custom_abs(discriminant) <= 1e-12:
         print("Discriminant is zero, the solution is:")
         solution = -b_val / (2.0 * a_val)
